@@ -473,3 +473,53 @@ body {
         min-width: auto;
     }
 }
+
+.media-test {
+    margin: 2rem 0;
+}
+
+.test-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    margin-bottom: 1rem;
+}
+
+.test-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.test-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.test-result {
+    min-height: 20px;
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+}
+
+.test-result.success {
+    color: #2ecc71;
+    font-weight: 600;
+}
+
+.test-result.error {
+    color: #e74c3c;
+    font-weight: 600;
+}
+
+.test-result.warning {
+    color: #f39c12;
+    font-weight: 600;
+}

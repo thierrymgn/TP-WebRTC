@@ -19,6 +19,7 @@ let currentState = AppState.LOGIN;
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Call Center WebRTC initialized');
     setupEventListeners();
+    checkMediaPermissions();
     showPage('login-page');
 });
 
@@ -47,10 +48,12 @@ function setupEventListeners() {
     const toggleAudioBtn = document.getElementById('toggle-audio-btn');
     const toggleVideoBtn = document.getElementById('toggle-video-btn');
     const shareScreenBtn = document.getElementById('share-screen-btn');
+    const testMediaBtn = document.getElementById('test-media-btn');
 
     toggleAudioBtn.addEventListener('click', toggleAudio);
     toggleVideoBtn.addEventListener('click', toggleVideo);
     shareScreenBtn.addEventListener('click', toggleScreenShare);
+    testMediaBtn.addEventListener('click', testMediaAccess);
 
     window.addEventListener('webrtc-connected', onWebRTCConnected);
     window.addEventListener('webrtc-ended', onWebRTCEnded);
@@ -222,6 +225,11 @@ function initiateCall(userId, username) {
 }
 
 async function acceptCall() {
+    if (!currentCall) {
+        showNotification('No call to accept', 'error');
+        return;
+    }
+    
     try {
         socket.emit('call-accepted', { callerId: currentCall.callerId });
 
@@ -231,13 +239,20 @@ async function acceptCall() {
         setState(AppState.ACTIVE_CALL);
         document.getElementById('active-call-name').textContent = currentCall.callerName;
     } catch (error) {
-        console.error('Error accepting call:', error);
-        showNotification('Error accepting call', 'error');
-        rejectCall();
+        console.error('Error during call acceptance:', error);
+        showNotification('Error during call acceptance: ' + error.message, 'error');
+
+        setState(AppState.IDLE);
+        currentCall = null;
     }
 }
 
 function rejectCall() {
+    if (!currentCall) {
+        showNotification('No call to reject', 'error');
+        return;
+    }
+    
     socket.emit('call-rejected', { callerId: currentCall.callerId });
     setState(AppState.IDLE);
     currentCall = null;
@@ -428,6 +443,94 @@ function handleDisconnect() {
 
     document.getElementById('username-input').value = '';
     document.getElementById('login-error').classList.remove('show');
+}
+
+async function testMediaAccess() {
+    const testBtn = document.getElementById('test-media-btn');
+    const resultDiv = document.getElementById('media-test-result');
+    
+    testBtn.disabled = true;
+    testBtn.textContent = '⏳ Testing...';
+    resultDiv.textContent = '';
+    resultDiv.className = 'test-result';
+    
+    try {
+        const constraints = {
+            audio: true,
+            video: {
+                width: { ideal: 640 },
+                height: { ideal: 480 }
+            }
+        };
+        
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        
+        const audioTracks = stream.getAudioTracks();
+        const videoTracks = stream.getVideoTracks();
+        
+        let message = '✅ ';
+        if (audioTracks.length > 0 && videoTracks.length > 0) {
+            message += 'Camera and microphone OK';
+            resultDiv.className = 'test-result success';
+        } else if (audioTracks.length > 0) {
+            message += 'Microphone OK, no camera';
+            resultDiv.className = 'test-result warning';
+        } else if (videoTracks.length > 0) {
+            message += 'Camera OK, no microphone';
+            resultDiv.className = 'test-result warning';
+        } else {
+            message += 'no media available';
+            resultDiv.className = 'test-result error';
+        }
+        
+        resultDiv.textContent = message;
+        
+        stream.getTracks().forEach(track => track.stop());
+
+        showNotification('Media test completed', 'success');
+        
+    } catch (error) {
+        console.error('Error during media test:', error);
+
+        let errorMessage = '❌ ';
+        switch (error.name) {
+            case 'NotAllowedError':
+                errorMessage += 'Permissions denied. Please allow access in your browser.';
+                break;
+            case 'NotFoundError':
+                errorMessage += 'No camera/microphone detected.';
+                break;
+            case 'NotReadableError':
+                errorMessage += 'MMedia already in use by another application.';
+                break;
+            default:
+                errorMessage += 'Error: ' + error.message;
+        }
+        
+        resultDiv.textContent = errorMessage;
+        resultDiv.className = 'test-result error';
+
+        showNotification('Error during media test', 'error');
+    } finally {
+        testBtn.disabled = false;
+        testBtn.textContent = '🎥 Test Camera/Microphone';
+    }
+}
+
+async function checkMediaPermissions() {
+    try {
+        const permissions = await navigator.permissions.query({ name: 'camera' });
+        console.log('Camera permission:', permissions.state);
+
+        const audioPermissions = await navigator.permissions.query({ name: 'microphone' });
+        console.log('Microphone permission:', audioPermissions.state);
+
+        if (permissions.state === 'denied' || audioPermissions.state === 'denied') {
+            showNotification('Media permissions denied. Click the lock icon in the address bar to allow them.', 'warning');
+        }
+    } catch (error) {
+        console.log('Unable to check permissions:', error);
+    }
 }
 
 window.addEventListener('error', (event) => {

@@ -68,19 +68,73 @@ class WebRTCHandler {
 
     async getLocalMedia() {
         try {
+            console.log('Attempting media access with full constraints...');
             this.localStream = await navigator.mediaDevices.getUserMedia(this.mediaConstraints);
 
-            const localVideo = document.getElementById('local-video');
-            if (localVideo) {
-                localVideo.srcObject = this.localStream;
-            }
-
-            console.log('Local media obtained successfully');
-            return this.localStream;
         } catch (error) {
-            console.error('Error getting local media:', error);
-            throw new Error('Unable to access camera and microphone');
+            console.warn('Failed with full constraints, trying simplified...', error);
+
+            try {
+                const simpleConstraints = {
+                    audio: true,
+                    video: true
+                };
+                this.localStream = await navigator.mediaDevices.getUserMedia(simpleConstraints);
+
+            } catch (error2) {
+                console.warn('Failed with video, trying audio only...', error2);
+
+                try {
+                    const audioOnlyConstraints = {
+                        audio: true,
+                        video: false
+                    };
+                    this.localStream = await navigator.mediaDevices.getUserMedia(audioOnlyConstraints);
+                    console.log('Audio only mode enabled');
+
+                } catch (error3) {
+                    console.error('Unable to access media:', error3);
+
+                    let errorMessage = 'Unable to access media. ';
+
+                    switch (error3.name) {
+                        case 'NotAllowedError':
+                            errorMessage += 'Please allow access to camera and microphone.';
+                            break;
+                        case 'NotFoundError':
+                            errorMessage += 'No camera or microphone found.';
+                            break;
+                        case 'NotReadableError':
+                            errorMessage += 'Camera/microphone already in use by another application.';
+                            break;
+                        case 'OverconstrainedError':
+                            errorMessage += 'Constraints not supported by your devices.';
+                            break;
+                        default:
+                            errorMessage += 'Technical error: ' + error3.message;
+                    }
+
+                    throw new Error(errorMessage);
+                }
+            }
         }
+
+        const localVideo = document.getElementById('local-video');
+        if (localVideo && this.localStream) {
+            localVideo.srcObject = this.localStream;
+
+            const hasVideo = this.localStream.getVideoTracks().length > 0;
+            if (!hasVideo) {
+                localVideo.style.display = 'none';
+                console.log('Audio only mode - local video hidden');
+            }
+        }
+
+        console.log('Local media obtained successfully');
+        console.log('Audio tracks:', this.localStream.getAudioTracks().length);
+        console.log('Video tracks:', this.localStream.getVideoTracks().length);
+
+        return this.localStream;
     }
 
     async createPeerConnection() {
