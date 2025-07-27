@@ -16,10 +16,26 @@ const AppState = {
 
 let currentState = AppState.LOGIN;
 
+function checkScreenShareSupport() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        console.warn('Screen sharing not supported by this browser');
+        
+        const shareBtn = document.getElementById('share-screen-btn');
+        if (shareBtn) {
+            shareBtn.style.display = 'none';
+        }
+        return false;
+    }
+    
+    console.log('Screen sharing is supported');
+    return true;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Call Center WebRTC initialized');
     setupEventListeners();
     checkMediaPermissions();
+    checkScreenShareSupport();
     showPage('login-page');
 });
 
@@ -305,27 +321,48 @@ function toggleVideo() {
 }
 
 async function toggleScreenShare() {
-    if (!webrtcHandler) return;
-
+    if (!webrtcHandler) {
+        console.warn('WebRTC handler not available');
+        return;
+    }
+    
     const btn = document.getElementById('share-screen-btn');
     const isSharing = btn.classList.contains('active');
-
+    
+    console.log('Toggle screen share. Currently sharing:', isSharing);
+    
     try {
         if (isSharing) {
+            console.log('Stopping screen share...');
             await webrtcHandler.stopScreenShare();
+            
             btn.classList.remove('active');
             btn.querySelector('.btn-icon').textContent = '🖥️';
             btn.title = 'Share screen';
+            
+            showNotification('Screen sharing stopped', 'info');
+            
         } else {
+            console.log('Starting screen share...');
             const success = await webrtcHandler.shareScreen();
+            
             if (success) {
                 btn.classList.add('active');
                 btn.querySelector('.btn-icon').textContent = '🔳';
                 btn.title = 'Stop sharing';
+                
+                showNotification('Screen sharing started', 'success');
+            } else {
+                showNotification('Failed to start screen sharing', 'error');
             }
         }
     } catch (error) {
-        showNotification('Screen sharing error', 'error');
+        console.error('Screen sharing error:', error);
+        showNotification('Screen sharing error: ' + error.message, 'error');
+        
+        btn.classList.remove('active');
+        btn.querySelector('.btn-icon').textContent = '🖥️';
+        btn.title = 'Share screen';
     }
 }
 
@@ -454,6 +491,8 @@ async function testMediaAccess() {
     resultDiv.textContent = '';
     resultDiv.className = 'test-result';
     
+    console.log('Starting media access test...');
+    
     try {
         const constraints = {
             audio: true,
@@ -463,10 +502,14 @@ async function testMediaAccess() {
             }
         };
         
+        console.log('Requesting user media with constraints:', constraints);
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         
         const audioTracks = stream.getAudioTracks();
         const videoTracks = stream.getVideoTracks();
+        
+        console.log('Audio tracks found:', audioTracks.length);
+        console.log('Video tracks found:', videoTracks.length);
         
         let message = '✅ ';
         if (audioTracks.length > 0 && videoTracks.length > 0) {
@@ -479,19 +522,22 @@ async function testMediaAccess() {
             message += 'Camera OK, no microphone';
             resultDiv.className = 'test-result warning';
         } else {
-            message += 'no media available';
+            message += 'No media available';
             resultDiv.className = 'test-result error';
         }
         
         resultDiv.textContent = message;
         
-        stream.getTracks().forEach(track => track.stop());
-
+        stream.getTracks().forEach(track => {
+            console.log('Stopping test track:', track.kind);
+            track.stop();
+        });
+        
         showNotification('Media test completed', 'success');
         
     } catch (error) {
-        console.error('Error during media test:', error);
-
+        console.error('Media test error:', error);
+        
         let errorMessage = '❌ ';
         switch (error.name) {
             case 'NotAllowedError':
@@ -501,7 +547,7 @@ async function testMediaAccess() {
                 errorMessage += 'No camera/microphone detected.';
                 break;
             case 'NotReadableError':
-                errorMessage += 'MMedia already in use by another application.';
+                errorMessage += 'Media already in use by another application.';
                 break;
             default:
                 errorMessage += 'Error: ' + error.message;

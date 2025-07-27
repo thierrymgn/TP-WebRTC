@@ -4,6 +4,8 @@ class WebRTCHandler {
         this.peerConnection = null;
         this.localStream = null;
         this.remoteStream = null;
+        this.originalLocalStream = null;
+        this.screenStream = null;
         this.isInitiator = false;
         this.currentPeerId = null;
 
@@ -124,9 +126,12 @@ class WebRTCHandler {
             localVideo.srcObject = this.localStream;
 
             const hasVideo = this.localStream.getVideoTracks().length > 0;
+            console.log('Local media stream obtained:', this.localStream);
             if (!hasVideo) {
                 localVideo.style.display = 'none';
                 console.log('Audio only mode - local video hidden');
+            } else {
+                localVideo.style.display = 'block';
             }
         }
 
@@ -276,55 +281,178 @@ class WebRTCHandler {
 
     async shareScreen() {
         try {
+            console.log('Starting screen share...');
+
             const screenStream = await navigator.mediaDevices.getDisplayMedia({
-                video: true,
-                audio: true
+                video: {
+                    mediaSource: 'screen',
+                    width: { max: 1920 },
+                    height: { max: 1080 },
+                    frameRate: { max: 30 }
+                },
+                audio: {
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    sampleRate: 44100
+                }
             });
 
+            console.log('Screen stream obtained:', screenStream);
+
+            if (!this.originalLocalStream) {
+                this.originalLocalStream = this.localStream;
+            }
+
             const videoTrack = screenStream.getVideoTracks()[0];
+            if (!videoTrack) {
+                throw new Error('No video track in screen stream');
+            }
+
             const sender = this.peerConnection.getSenders().find(s =>
                 s.track && s.track.kind === 'video'
             );
 
             if (sender) {
+                console.log('Replacing video track with screen share');
                 await sender.replaceTrack(videoTrack);
+            } else {
+                console.log('Adding screen share track to peer connection');
+                this.peerConnection.addTrack(videoTrack, screenStream);
             }
 
+            const localVideo = document.getElementById('local-video');
+            if (localVideo) {
+                localVideo.srcObject = screenStream;
+                localVideo.style.display = 'block';
+            }
+
+            this.localStream = screenStream;
+            this.screenStream = screenStream;
+
             videoTrack.onended = async () => {
+                console.log('Screen share ended by user');
                 await this.stopScreenShare();
             };
 
+            console.log('Screen sharing started successfully');
+
+            if (this.isInitiator) {
+                await this.createAndSendOffer();
+            }
             return true;
+
         } catch (error) {
-            console.error('Error sharing screen:', error);
+            console.error('Error starting screen share:', error);
+
+            let errorMessage = 'Screen sharing failed: ';
+            switch (error.name) {
+                case 'NotAllowedError':
+                    errorMessage += 'Permission denied';
+                    break;
+                case 'NotSupportedError':
+                    errorMessage += 'Not supported by browser';
+                    break;
+                case 'NotReadableError':
+                    errorMessage += 'Screen capture not available';
+                    break;
+                default:
+                    errorMessage += error.message;
+            }
+
+            console.error(errorMessage);
             return false;
         }
     }
 
     async stopScreenShare() {
         try {
-            const newStream = await navigator.mediaDevices.getUserMedia(this.mediaConstraints);
-            const videoTrack = newStream.getVideoTracks()[0];
+            console.log('Stopping screen share...');
 
-            const sender = this.peerConnection.getSenders().find(s =>
-                s.track && s.track.kind === 'video'
-            );
-
-            if (sender) {
-                await sender.replaceTrack(videoTrack);
+            if (this.screenStream) {
+                this.screenStream.getTracks().forEach(track => {
+                    console.log('Stopping screen track:', track.kind);
+                    track.stop();
+                });
+                this.screenStream = null;
             }
 
-            const oldVideoTrack = this.localStream.getVideoTracks()[0];
-            if (oldVideoTrack) {
-                oldVideoTrack.stop();
-                this.localStream.removeTrack(oldVideoTrack);
-                this.localStream.addTrack(videoTrack);
+            if (this.originalLocalStream) {
+                console.log('Restoring original camera stream');
+
+                const videoTrack = this.originalLocalStream.getVideoTracks()[0];
+                if (videoTrack) {
+                    const sender = this.peerConnection.getSenders().find(s =>
+                        s.track && s.track.kind === 'video'
+                    );
+
+                    if (sender) {
+                        await sender.replaceTrack(videoTrack);
+                        console.log('Video track replaced back to camera');
+                    }
+                }
+
+                const localVideo = document.getElementById('local-video');
+                if (localVideo) {
+                    localVideo.srcObject = this.originalLocalStream;
+                    const hasVideo = this.originalLocalStream.getVideoTracks().length > 0;
+                    localVideo.style.display = hasVideo ? 'block' : 'none';
+                }
+
+                this.localStream = this.originalLocalStream;
+                this.originalLocalStream = null;
+
+            } else {
+                console.log('No original stream to restore, getting new camera stream');
+
+                try {
+                    const newStream = await navigator.mediaDevices.getUserMedia({
+                        audio: true,
+                        video: true
+                    });
+
+                    const videoTrack = newStream.getVideoTracks()[0];
+                    if (videoTrack) {
+                        const sender = this.peerConnection.getSenders().find(s =>
+                            s.track && s.track.kind === 'video'
+                        );
+
+                        if (sender) {
+                            await sender.replaceTrack(videoTrack);
+                        }
+
+                        const audioTrack = this.localStream?.getAudioTracks()[0];
+                        const newMediaStream = new MediaStream();
+
+                        if (audioTrack) {
+                            newMediaStream.addTrack(audioTrack);
+                        }
+                        newMediaStream.addTrack(videoTrack);
+
+                        this.localStream = newMediaStream;
+
+                        const localVideo = document.getElementById('local-video');
+                        if (localVideo) {
+                            localVideo.srcObject = this.localStream;
+                            localVideo.style.display = 'block';
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error getting new camera stream:', error);
+
+                    const localVideo = document.getElementById('local-video');
+                    if (localVideo) {
+                        localVideo.srcObject = null;
+                        localVideo.style.display = 'none';
+                    }
+                }
             }
 
-            const localVideo = document.getElementById('local-video');
-            if (localVideo) {
-                localVideo.srcObject = this.localStream;
+            console.log('Screen share stopped successfully');
+
+            if (this.isInitiator) {
+                await this.createAndSendOffer();
             }
+
         } catch (error) {
             console.error('Error stopping screen share:', error);
         }
@@ -355,7 +483,6 @@ class WebRTCHandler {
 
         window.dispatchEvent(new CustomEvent('webrtc-ended'));
     }
-
 }
 
 window.WebRTCHandler = WebRTCHandler;
