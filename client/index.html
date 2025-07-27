@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Call Center WebRTC</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="login-page" class="page active">
+      <div class="login-container">
+        <h1>Call Center WebRTC</h1>
+        <div class="login-form">
+          <input
+            type="text"
+            id="username-input"
+            placeholder="Entrez votre nom d'utilisateur"
+            maxlength="20"
+            autocomplete="off"
+          />
+          <button id="connect-btn">Se connecter</button>
+          <div id="login-error" class="error-message"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="main-page" class="page">
+      <header class="header">
+        <div class="header-content">
+          <h1>Call Center</h1>
+          <div class="user-info">
+            <span
+              >Connecté en tant que: <strong id="current-username"></strong
+            ></span>
+            <button id="disconnect-btn" class="disconnect-btn">
+              Déconnexion
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main class="main-content">
+        <aside class="users-panel">
+          <h3>Utilisateurs en ligne (<span id="users-count">0</span>)</h3>
+          <div id="users-list" class="users-list"></div>
+        </aside>
+
+        <section class="call-area">
+          <div id="idle-state" class="call-state active">
+            <div class="idle-message">
+              <h2>Prêt pour un appel</h2>
+              <p>
+                Cliquez sur un utilisateur dans la liste pour démarrer un appel
+              </p>
+              <div class="status-indicator available">
+                <span class="status-dot"></span>
+                Disponible
+              </div>
+            </div>
+          </div>
+
+          <div id="outgoing-call-state" class="call-state">
+            <div class="call-info">
+              <h2>Appel en cours...</h2>
+              <p>Appel vers <strong id="outgoing-target-name"></strong></p>
+              <div class="calling-animation">
+                <div class="pulse"></div>
+              </div>
+              <button id="cancel-call-btn" class="cancel-btn">
+                Annuler l'appel
+              </button>
+            </div>
+          </div>
+
+          <div id="incoming-call-state" class="call-state">
+            <div class="call-info">
+              <h2>Appel entrant</h2>
+              <p><strong id="incoming-caller-name"></strong> vous appelle</p>
+              <div class="incoming-animation">
+                <div class="ring"></div>
+              </div>
+              <div class="call-actions">
+                <button id="accept-call-btn" class="accept-btn">
+                  Accepter
+                </button>
+                <button id="reject-call-btn" class="reject-btn">Refuser</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="active-call-state" class="call-state">
+            <div class="video-container">
+              <video
+                id="remote-video"
+                class="remote-video"
+                autoplay
+                playsinline
+              ></video>
+              <video
+                id="local-video"
+                class="local-video"
+                autoplay
+                playsinline
+                muted
+              ></video>
+            </div>
+
+            <div class="call-controls">
+              <div class="call-info-bar">
+                <span
+                  >En communication avec <strong id="active-call-name"></strong
+                ></span>
+                <span id="call-duration">00:00</span>
+              </div>
+
+              <div class="control-buttons">
+                <button
+                  id="toggle-audio-btn"
+                  class="control-btn active"
+                  title="Microphone"
+                >
+                  <span class="btn-icon">🎤</span>
+                </button>
+                <button
+                  id="toggle-video-btn"
+                  class="control-btn active"
+                  title="Caméra"
+                >
+                  <span class="btn-icon">📹</span>
+                </button>
+                <button
+                  id="share-screen-btn"
+                  class="control-btn"
+                  title="Partager l'écran"
+                >
+                  <span class="btn-icon">🖥️</span>
+                </button>
+                <button
+                  id="end-call-btn"
+                  class="control-btn end-call"
+                  title="Raccrocher"
+                >
+                  <span class="btn-icon">📞</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <div id="notifications" class="notifications-container"></div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="webrtc-handler.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
